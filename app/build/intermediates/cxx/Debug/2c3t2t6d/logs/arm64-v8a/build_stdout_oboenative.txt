@@ -1,0 +1,2 @@
+ninja: Entering directory `/Users/dipaksisodiya/work/OboeNative/app/.cxx/Debug/2c3t2t6d/arm64-v8a'
+ninja: no work to do.

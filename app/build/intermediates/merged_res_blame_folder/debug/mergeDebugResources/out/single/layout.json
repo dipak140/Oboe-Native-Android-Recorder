@@ -1,0 +1,10 @@
+[
+    {
+        "merged": "/Users/dipaksisodiya/.gradle/daemon/8.7/in.reconv.oboenative.app-mergeDebugResources-30:/layout/activity_main.xml",
+        "source": "/Users/dipaksisodiya/.gradle/daemon/8.7/in.reconv.oboenative.app-main-33:/layout/activity_main.xml"
+    },
+    {
+        "merged": "in.reconv.oboenative.app-mergeDebugResources-30:/layout/activity_main.xml",
+        "source": "in.reconv.oboenative.app-main-33:/layout/activity_main.xml"
+    }
+]
