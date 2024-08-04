@@ -1,11 +1,9 @@
 package in.reconv.oboenative;
 
-import static in.reconv.oboenative.DuplexStreamForegroundService.ACTION_START;
-import static in.reconv.oboenative.DuplexStreamForegroundService.ACTION_STOP;
-
+import static in.reconv.oboenativemodule.DuplexStreamForegroundService.ACTION_START;
+import static in.reconv.oboenativemodule.DuplexStreamForegroundService.ACTION_STOP;
 import androidx.annotation.NonNull;
 import androidx.core.app.ActivityCompat;
-
 import android.Manifest;
 import android.app.Activity;
 import android.content.Intent;
@@ -19,6 +17,10 @@ import android.widget.Button;
 import android.widget.Toast;
 
 import in.reconv.oboenative.databinding.ActivityMainBinding;
+import in.reconv.oboenativemodule.NativeLib;
+
+import in.reconv.oboenativemodule.LiveEffectEngine;
+import in.reconv.oboenativemodule.DuplexStreamForegroundService;
 
 public class MainActivity extends Activity implements
         ActivityCompat.OnRequestPermissionsResultCallback {
@@ -37,8 +39,7 @@ public class MainActivity extends Activity implements
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
-
-        setContentView(R.layout.activity_main);
+        NativeLib.letsdosomting();
 
         Button startFeedbackButton = findViewById(R.id.startFeedbackButton);
         Button stopFeedbackButton = findViewById(R.id.stopFeedbackButton);
@@ -171,6 +172,4 @@ public class MainActivity extends Activity implements
         }
         super.onDestroy();
     }
-
-
 }
