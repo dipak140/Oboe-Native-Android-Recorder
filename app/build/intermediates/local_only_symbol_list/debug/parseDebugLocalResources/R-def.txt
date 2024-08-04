@@ -9,11 +9,8 @@ color teal_700
 color white
 drawable ic_launcher_background
 drawable ic_launcher_foreground
-id sample_text
-id startPlaybackButton
-id startRecordingButton
-id stopPlaybackButton
-id stopRecordingButton
+id startFeedbackButton
+id stopFeedbackButton
 layout activity_main
 mipmap ic_launcher
 mipmap ic_launcher_round

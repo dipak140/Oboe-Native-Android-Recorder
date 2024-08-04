@@ -6,7 +6,6 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Button;
 import android.widget.LinearLayout;
-import android.widget.TextView;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.viewbinding.ViewBinding;
@@ -21,29 +20,16 @@ public final class ActivityMainBinding implements ViewBinding {
   private final LinearLayout rootView;
 
   @NonNull
-  public final TextView sampleText;
+  public final Button startFeedbackButton;
 
   @NonNull
-  public final Button startPlaybackButton;
+  public final Button stopFeedbackButton;
 
-  @NonNull
-  public final Button startRecordingButton;
-
-  @NonNull
-  public final Button stopPlaybackButton;
-
-  @NonNull
-  public final Button stopRecordingButton;
-
-  private ActivityMainBinding(@NonNull LinearLayout rootView, @NonNull TextView sampleText,
-      @NonNull Button startPlaybackButton, @NonNull Button startRecordingButton,
-      @NonNull Button stopPlaybackButton, @NonNull Button stopRecordingButton) {
+  private ActivityMainBinding(@NonNull LinearLayout rootView, @NonNull Button startFeedbackButton,
+      @NonNull Button stopFeedbackButton) {
     this.rootView = rootView;
-    this.sampleText = sampleText;
-    this.startPlaybackButton = startPlaybackButton;
-    this.startRecordingButton = startRecordingButton;
-    this.stopPlaybackButton = stopPlaybackButton;
-    this.stopRecordingButton = stopRecordingButton;
+    this.startFeedbackButton = startFeedbackButton;
+    this.stopFeedbackButton = stopFeedbackButton;
   }
 
   @Override
@@ -73,38 +59,20 @@ public final class ActivityMainBinding implements ViewBinding {
     // This is done to optimize the compiled bytecode for size and performance.
     int id;
     missingId: {
-      id = R.id.sample_text;
-      TextView sampleText = ViewBindings.findChildViewById(rootView, id);
-      if (sampleText == null) {
+      id = R.id.startFeedbackButton;
+      Button startFeedbackButton = ViewBindings.findChildViewById(rootView, id);
+      if (startFeedbackButton == null) {
         break missingId;
       }
 
-      id = R.id.startPlaybackButton;
-      Button startPlaybackButton = ViewBindings.findChildViewById(rootView, id);
-      if (startPlaybackButton == null) {
+      id = R.id.stopFeedbackButton;
+      Button stopFeedbackButton = ViewBindings.findChildViewById(rootView, id);
+      if (stopFeedbackButton == null) {
         break missingId;
       }
 
-      id = R.id.startRecordingButton;
-      Button startRecordingButton = ViewBindings.findChildViewById(rootView, id);
-      if (startRecordingButton == null) {
-        break missingId;
-      }
-
-      id = R.id.stopPlaybackButton;
-      Button stopPlaybackButton = ViewBindings.findChildViewById(rootView, id);
-      if (stopPlaybackButton == null) {
-        break missingId;
-      }
-
-      id = R.id.stopRecordingButton;
-      Button stopRecordingButton = ViewBindings.findChildViewById(rootView, id);
-      if (stopRecordingButton == null) {
-        break missingId;
-      }
-
-      return new ActivityMainBinding((LinearLayout) rootView, sampleText, startPlaybackButton,
-          startRecordingButton, stopPlaybackButton, stopRecordingButton);
+      return new ActivityMainBinding((LinearLayout) rootView, startFeedbackButton,
+          stopFeedbackButton);
     }
     String missingId = rootView.getResources().getResourceName(id);
     throw new NullPointerException("Missing required view with ID: ".concat(missingId));

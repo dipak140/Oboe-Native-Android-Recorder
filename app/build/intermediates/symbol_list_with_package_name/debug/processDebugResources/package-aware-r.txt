@@ -3468,7 +3468,6 @@ id right_icon
 id right_side
 id rounded
 id row_index_key
-id sample_text
 id save_non_transition_alpha
 id save_overlay_view
 id sawtooth
@@ -3520,16 +3519,14 @@ id src_in
 id src_over
 id standard
 id start
+id startFeedbackButton
 id startHorizontal
-id startPlaybackButton
-id startRecordingButton
 id startToEnd
 id startVertical
 id staticLayout
 id staticPostLayout
 id stop
-id stopPlaybackButton
-id stopRecordingButton
+id stopFeedbackButton
 id stretch
 id submenuarrow
 id submit_area
