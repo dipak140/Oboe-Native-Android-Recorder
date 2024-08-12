@@ -22,6 +22,7 @@ public enum LiveEffectEngine {
     public static native void setPlaybackDeviceId(int deviceId);
     public static native void delete();
     static native void native_setDefaultStreamValues(int defaultSampleRate, int defaultFramesPerBurst);
+    public static native void setVolume(float volume);
 
     public static void setDefaultStreamValues(Context context) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN_MR1){

@@ -80,8 +80,7 @@ oboe::Result  LiveEffectEngine::openStreams() {
     setupPlaybackStreamParameters(&outBuilder);
     oboe::Result result = outBuilder.openStream(mPlayStream);
     if (result != oboe::Result::OK) {
-
-        mSampleRate = oboe::kUnspecified;
+        mSampleRate = 44100;
         return result;
     } else {
         // The input stream needs to run at the same sample rate as the output.
@@ -153,7 +152,7 @@ oboe::AudioStreamBuilder *LiveEffectEngine::setupCommonStreamParameters(
     builder->setAudioApi(mAudioApi)
         ->setFormat(mFormat)
         ->setFormatConversionAllowed(true)
-        ->setSharingMode(oboe::SharingMode::Exclusive)
+//        ->setSharingMode(oboe::SharingMode::Exclusive)
         ->setPerformanceMode(oboe::PerformanceMode::LowLatency);
     return builder;
 }
@@ -201,6 +200,10 @@ void LiveEffectEngine::warnIfNotLowLatency(std::shared_ptr<oboe::AudioStream> &s
  */
 oboe::DataCallbackResult LiveEffectEngine::onAudioReady(
     oboe::AudioStream *oboeStream, void *audioData, int32_t numFrames) {
+    float *floatData = static_cast<float*>(audioData);
+    for (int i = 0; i < numFrames * mOutputChannelCount; ++i) {
+        floatData[i] *= mVolume;
+    }
     return mDuplexStream->onAudioReady(oboeStream, audioData, numFrames);
 }
 
@@ -236,4 +239,8 @@ void LiveEffectEngine::onErrorAfterClose(oboe::AudioStream *oboeStream,
         printf("Restarting AudioStream");
         openStreams();
     }
+}
+
+void LiveEffectEngine::setVolume(float volume) {
+    mVolume = volume;
 }

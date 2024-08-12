@@ -50,6 +50,7 @@ public:
 
     bool setAudioApi(oboe::AudioApi);
     bool isAAudioRecommended(void);
+    void setVolume(float volume);  // Add this line
 
 private:
     bool              mIsEffectOn = false;
@@ -57,7 +58,7 @@ private:
     int32_t           mPlaybackDeviceId = oboe::kUnspecified;
     const oboe::AudioFormat mFormat = oboe::AudioFormat::Float; // for easier processing
     oboe::AudioApi    mAudioApi = oboe::AudioApi::AAudio;
-    int32_t           mSampleRate = oboe::kUnspecified;
+    int32_t           mSampleRate = 44100;
     const int32_t     mInputChannelCount = oboe::ChannelCount::Stereo;
     const int32_t     mOutputChannelCount = oboe::ChannelCount::Stereo;
 
@@ -78,6 +79,7 @@ private:
     oboe::AudioStreamBuilder *setupPlaybackStreamParameters(
         oboe::AudioStreamBuilder *builder);
     void warnIfNotLowLatency(std::shared_ptr<oboe::AudioStream> &stream);
+    float mVolume = 1.0f;  // Add this line
 };
 
 #endif  // OBOE_LIVEEFFECTENGINE_H
