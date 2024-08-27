@@ -18,6 +18,7 @@ import android.util.Log;
 import android.view.View;
 import android.widget.Button;
 import android.widget.Toast;
+import android.media.MediaPlayer;
 
 import in.reconv.oboenative.databinding.ActivityMainBinding;
 import in.reconv.oboenativemodule.NativeLib;
@@ -39,6 +40,8 @@ public class MainActivity extends Activity implements
     private static final String TAG = MainActivity.class.getName();
     private static final int MY_PERMISSIONS_REQUEST_WRITE_EXTERNAL_STORAGE = 100;
     private String filePath;
+    private MediaPlayer mediaPlayer;
+
 
 
     // Full path that is going to be sent to C++ through JNI ("/storage/emulated/0/Recorders/record.wav")
@@ -57,6 +60,7 @@ public class MainActivity extends Activity implements
         NativeLib.letsdosomting();
         Button startFeedbackButton = findViewById(R.id.startFeedbackButton);
         Button stopFeedbackButton = findViewById(R.id.stopFeedbackButton);
+        Button playRecordingButton = findViewById(R.id.playRecordingButton);
 
         startFeedbackButton.setOnClickListener(new View.OnClickListener() {
             @Override
@@ -70,6 +74,13 @@ public class MainActivity extends Activity implements
             @Override
             public void onClick(View view) {
                 stopEffect();
+            }
+        });
+
+        playRecordingButton.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                playRecording();
             }
         });
 
@@ -107,6 +118,28 @@ public class MainActivity extends Activity implements
         }
     }
 
+    private void playRecording() {
+        if (filePath != null) {
+            mediaPlayer = new MediaPlayer();
+            try {
+                mediaPlayer.setDataSource(filePath);
+                mediaPlayer.prepare();
+                mediaPlayer.start();
+                mediaPlayer.setOnCompletionListener(new MediaPlayer.OnCompletionListener() {
+                    @Override
+                    public void onCompletion(MediaPlayer mp) {
+                        mp.release();
+                        mediaPlayer = null;
+                    }
+                });
+            } catch (Exception e) {
+                e.printStackTrace();
+                Toast.makeText(this, "Error playing recording", Toast.LENGTH_SHORT).show();
+            }
+        } else {
+            Toast.makeText(this, "No recording found", Toast.LENGTH_SHORT).show();
+        }
+    }
     private void startEffect() {
         Log.d(TAG, "Attempting to start");
 
