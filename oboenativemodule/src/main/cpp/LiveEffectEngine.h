@@ -19,7 +19,9 @@
 
 #include <jni.h>
 #include <oboe/Oboe.h>
+#include <memory>
 #include <string>
+#include <fstream>
 #include <thread>
 #include "FullDuplexPass.h"
 
@@ -34,7 +36,7 @@ public:
      * @param isOn
      * @return true if it succeeds
      */
-    bool setEffectOn(bool isOn);
+    bool setEffectOn(bool isOn, const char *fullPathToFile);
 
     /*
      * oboe::AudioStreamDataCallback interface implementation
@@ -42,11 +44,9 @@ public:
     oboe::DataCallbackResult onAudioReady(oboe::AudioStream *oboeStream,
                                           void *audioData, int32_t numFrames) override;
 
-    /*
-     * oboe::AudioStreamErrorCallback interface implementation
-     */
-    void onErrorBeforeClose(oboe::AudioStream *oboeStream, oboe::Result error) override;
-    void onErrorAfterClose(oboe::AudioStream *oboeStream, oboe::Result error) override;
+    // New methods for recording
+    void startRecording(const std::string& filePath, int32_t sampleRate, int16_t numChannels);
+    void stopRecording();
 
     bool setAudioApi(oboe::AudioApi);
     bool isAAudioRecommended(void);
@@ -61,14 +61,18 @@ private:
     int32_t           mSampleRate = 44100;
     const int32_t     mInputChannelCount = oboe::ChannelCount::Stereo;
     const int32_t     mOutputChannelCount = oboe::ChannelCount::Stereo;
+    size_t data_chunk_pos = 0;
 
     std::unique_ptr<FullDuplexPass> mDuplexStream;
     std::shared_ptr<oboe::AudioStream> mRecordingStream;
     std::shared_ptr<oboe::AudioStream> mPlayStream;
 
-    oboe::Result openStreams();
+    oboe::Result openStreams(const char *fullPathToFile);
 
     void closeStreams();
+    // WAV file related methods
+    void writeWavHeader();
+    void writeWavHeaderPlaceholder();
 
     void closeStream(std::shared_ptr<oboe::AudioStream> &stream);
 
@@ -80,6 +84,13 @@ private:
         oboe::AudioStreamBuilder *builder);
     void warnIfNotLowLatency(std::shared_ptr<oboe::AudioStream> &stream);
     float mVolume = 1.0f;  // Add this line
+
+    // WAV file members
+    std::ofstream mWavFile;
+    std::string mWavFilePath;
+    int32_t mWavFileSampleRate;
+    int16_t mWavFileNumChannels;
+    bool mIsRecording = false;
 };
 
 #endif  // OBOE_LIVEEFFECTENGINE_H

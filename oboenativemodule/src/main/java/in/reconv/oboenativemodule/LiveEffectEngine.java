@@ -17,7 +17,7 @@ public enum LiveEffectEngine {
     public static native boolean create();
     public static native boolean isAAudioRecommended();
     public static native boolean setAPI(int apiType);
-    public static native boolean setEffectOn(boolean isEffectOn);
+    public static native boolean setEffectOn(boolean isEffectOn, String fullPathToFile);
     public static native void setRecordingDeviceId(int deviceId);
     public static native void setPlaybackDeviceId(int deviceId);
     public static native void delete();

@@ -49,7 +49,7 @@ publishing {
         release(MavenPublication) {
             groupId = 'in.reconv'
             artifactId = 'oboenativemodule'
-            version = '1.0.3'
+            version = '1.0.4-exp5'
 
             afterEvaluate {
                 from components.release

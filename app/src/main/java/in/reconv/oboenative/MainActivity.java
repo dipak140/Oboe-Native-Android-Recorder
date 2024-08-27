@@ -1,9 +1,12 @@
 package in.reconv.oboenative;
 
+import static android.os.Environment.getExternalStorageDirectory;
 import static in.reconv.oboenativemodule.DuplexStreamForegroundService.ACTION_START;
 import static in.reconv.oboenativemodule.DuplexStreamForegroundService.ACTION_STOP;
 import androidx.annotation.NonNull;
 import androidx.core.app.ActivityCompat;
+import androidx.core.content.ContextCompat;
+
 import android.Manifest;
 import android.app.Activity;
 import android.content.Intent;
@@ -34,13 +37,24 @@ public class MainActivity extends Activity implements
     private boolean mAAudioRecommended;
     private static final int AUDIO_EFFECT_REQUEST = 0;
     private static final String TAG = MainActivity.class.getName();
+    private static final int MY_PERMISSIONS_REQUEST_WRITE_EXTERNAL_STORAGE = 100;
+    private String filePath;
+
+
+    // Full path that is going to be sent to C++ through JNI ("/storage/emulated/0/Recorders/record.wav")
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE)
+                != PackageManager.PERMISSION_GRANTED) {
+            ActivityCompat.requestPermissions(this,
+                    new String[]{Manifest.permission.WRITE_EXTERNAL_STORAGE},
+                    MY_PERMISSIONS_REQUEST_WRITE_EXTERNAL_STORAGE);
+        }
+
         setContentView(R.layout.activity_main);
         NativeLib.letsdosomting();
-
         Button startFeedbackButton = findViewById(R.id.startFeedbackButton);
         Button stopFeedbackButton = findViewById(R.id.stopFeedbackButton);
 
@@ -49,6 +63,13 @@ public class MainActivity extends Activity implements
             public void onClick(View view) {
                 LiveEffectEngine.setAPI(apiSelection);
                 startEffect();
+            }
+        });
+
+        stopFeedbackButton.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                stopEffect();
             }
         });
 
@@ -94,7 +115,9 @@ public class MainActivity extends Activity implements
             return;
         }
 
-        boolean success = LiveEffectEngine.setEffectOn(true);
+        String timestamp = String.valueOf(System.currentTimeMillis());
+        filePath = getExternalFilesDir(null) + "/" + timestamp + "_audio_recording.wav";
+        boolean success = LiveEffectEngine.setEffectOn(true, filePath);
         if (success) {
             isPlaying = true;
         } else {
@@ -108,7 +131,7 @@ public class MainActivity extends Activity implements
     }
 
     private void stopEffect() {
-        LiveEffectEngine.setEffectOn(false);
+        LiveEffectEngine.setEffectOn(false, filePath);
         isPlaying = false;
     }
 
@@ -135,7 +158,6 @@ public class MainActivity extends Activity implements
 
         if (grantResults.length != 1 ||
                 grantResults[0] != PackageManager.PERMISSION_GRANTED) {
-
             // User denied the permission, without this we cannot record audio
             // Show a toast and update the status accordingly
             Toast.makeText(getApplicationContext(),

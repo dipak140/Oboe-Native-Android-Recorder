@@ -11,6 +11,8 @@ add_library(${CMAKE_PROJECT_NAME} SHARED
         native-lib.cpp
         LiveEffectEngine.cpp
 )
+
+
 target_link_libraries(${CMAKE_PROJECT_NAME}
         oboe
         android
