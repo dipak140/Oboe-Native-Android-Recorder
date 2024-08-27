@@ -97,3 +97,4 @@ Java_in_reconv_oboenative_LiveEffectEngine_native_1setDefaultStreamValues(JNIEnv
     oboe::DefaultStreamValues::FramesPerBurst = (int32_t) framesPerBurst;
 }
 }
+

@@ -1,21 +1,7 @@
-/**
- * Copyright 2018 The Android Open Source Project
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
 #include <cassert>
-
+#include <fstream>
+#include <cstring>
+#include <android/log.h>
 #include "LiveEffectEngine.h"
 
 LiveEffectEngine::LiveEffectEngine() {
@@ -40,50 +26,109 @@ bool LiveEffectEngine::setAudioApi(oboe::AudioApi api) {
     return true;
 }
 
-bool LiveEffectEngine::setEffectOn(bool isOn) {
+bool LiveEffectEngine::setEffectOn(bool isOn, const char *fullPathToFile) {
     bool success = true;
     if (isOn != mIsEffectOn) {
         if (isOn) {
-            success = openStreams() == oboe::Result::OK;
+            // Open audio streams and start recording
+            success = openStreams(fullPathToFile) == oboe::Result::OK;
             if (success) {
+                startRecording(fullPathToFile, mSampleRate, mInputChannelCount);
                 mIsEffectOn = isOn;
             }
         } else {
+            // Stop recording and close streams
+            stopRecording();
             closeStreams();
             mIsEffectOn = isOn;
-       }
+        }
     }
     return success;
 }
 
-void LiveEffectEngine::closeStreams() {
-    /*
-    * Note: The order of events is important here.
-    * The playback stream must be closed before the recording stream. If the
-    * recording stream were to be closed first the playback stream's
-    * callback may attempt to read from the recording stream
-    * which would cause the app to crash since the recording stream would be
-    * null.
-    */
-    mDuplexStream->stop();
-    closeStream(mPlayStream);
-    closeStream(mRecordingStream);
-    mDuplexStream.reset();
+void LiveEffectEngine::startRecording(const std::string& filePath, int32_t sampleRate, int16_t numChannels) {
+    mWavFilePath = filePath;
+    mWavFileSampleRate = sampleRate;
+    mWavFileNumChannels = numChannels;
+
+    // Open the file in binary mode
+    mWavFile.open(mWavFilePath, std::ios::binary);
+    if (mWavFile.is_open()) {
+        // Write the WAV header placeholder
+        writeWavHeaderPlaceholder();
+        mIsRecording = true;
+    } else {
+        __android_log_print(ANDROID_LOG_ERROR, "LiveEffectEngine", "Failed to open WAV file: %s", mWavFilePath.c_str());
+    }
 }
 
-oboe::Result  LiveEffectEngine::openStreams() {
-    // Note: The order of stream creation is important. We create the playback
-    // stream first, then use properties from the playback stream
-    // (e.g. sample rate) to create the recording stream. By matching the
-    // properties we should get the lowest latency path
+void LiveEffectEngine::stopRecording() {
+    if (mRecordingStream) {
+        mRecordingStream->requestStop();
+        mRecordingStream->close();
+    }
+
+    if (mIsRecording && mWavFile.is_open()) {
+        writeWavHeader(); // Write the final WAV header with correct sizes
+
+        // Close the WAV file
+        mWavFile.close();
+        mIsRecording = false;
+    }
+}
+
+void LiveEffectEngine::writeWavHeader() {
+    if (!mWavFile.is_open()) {
+        return;
+    }
+
+    // File size
+    std::streampos fileSize = mWavFile.tellp();
+
+    // Go to the beginning and write the correct header
+    mWavFile.seekp(0, std::ios::beg);
+
+    // RIFF header
+    mWavFile.write("RIFF", 4);
+    uint32_t chunkSize = static_cast<uint32_t>(fileSize) - 8;
+    mWavFile.write(reinterpret_cast<const char*>(&chunkSize), 4);
+    mWavFile.write("WAVE", 4);
+
+    // fmt sub-chunk
+    mWavFile.write("fmt ", 4);
+    uint32_t subChunk1Size = 16; // For PCM
+    mWavFile.write(reinterpret_cast<const char*>(&subChunk1Size), 4);
+    uint16_t audioFormat = 1; // PCM = 1
+    mWavFile.write(reinterpret_cast<const char*>(&audioFormat), 2);
+    mWavFile.write(reinterpret_cast<const char*>(&mWavFileNumChannels), 2);
+    mWavFile.write(reinterpret_cast<const char*>(&mWavFileSampleRate), 4);
+    uint32_t byteRate = mWavFileSampleRate * mWavFileNumChannels * sizeof(int16_t);
+    mWavFile.write(reinterpret_cast<const char*>(&byteRate), 4);
+    uint16_t blockAlign = mWavFileNumChannels * sizeof(int16_t);
+    mWavFile.write(reinterpret_cast<const char*>(&blockAlign), 2);
+    uint16_t bitsPerSample = 16; // Assuming 16-bit PCM
+    mWavFile.write(reinterpret_cast<const char*>(&bitsPerSample), 2);
+
+    // data sub-chunk
+    mWavFile.write("data", 4);
+    uint32_t subChunk2Size = static_cast<uint32_t>(fileSize) - 44;
+    mWavFile.write(reinterpret_cast<const char*>(&subChunk2Size), 4);
+}
+
+
+void LiveEffectEngine::writeWavHeaderPlaceholder() {
+    char header[44] = { 0 };
+    mWavFile.write(header, 44);
+}
+
+oboe::Result LiveEffectEngine::openStreams(const char *fullPathToFile) {
     oboe::AudioStreamBuilder inBuilder, outBuilder;
     setupPlaybackStreamParameters(&outBuilder);
     oboe::Result result = outBuilder.openStream(mPlayStream);
     if (result != oboe::Result::OK) {
-        mSampleRate = 44100;
+        mSampleRate = 44100; // Fallback to a standard sample rate
         return result;
     } else {
-        // The input stream needs to run at the same sample rate as the output.
         mSampleRate = mPlayStream->getSampleRate();
     }
     warnIfNotLowLatency(mPlayStream);
@@ -100,144 +145,85 @@ oboe::Result  LiveEffectEngine::openStreams() {
     mDuplexStream->setSharedInputStream(mRecordingStream);
     mDuplexStream->setSharedOutputStream(mPlayStream);
     mDuplexStream->start();
+
     return result;
 }
 
-/**
- * Sets the stream parameters which are specific to recording,
- * including the sample rate which is determined from the
- * playback stream.
- *
- * @param builder The recording stream builder
- * @param sampleRate The desired sample rate of the recording stream
- */
 oboe::AudioStreamBuilder *LiveEffectEngine::setupRecordingStreamParameters(
-    oboe::AudioStreamBuilder *builder, int32_t sampleRate) {
-    // This sample uses blocking read() because we don't specify a callback
+        oboe::AudioStreamBuilder *builder, int32_t sampleRate) {
     builder->setDeviceId(mRecordingDeviceId)
-        ->setDirection(oboe::Direction::Input)
-        ->setSampleRate(sampleRate)
-        ->setChannelCount(mInputChannelCount);
+            ->setDirection(oboe::Direction::Input)
+            ->setSampleRate(sampleRate)
+            ->setChannelCount(mInputChannelCount);
     return setupCommonStreamParameters(builder);
 }
 
-/**
- * Sets the stream parameters which are specific to playback, including device
- * id and the dataCallback function, which must be set for low latency
- * playback.
- * @param builder The playback stream builder
- */
 oboe::AudioStreamBuilder *LiveEffectEngine::setupPlaybackStreamParameters(
-    oboe::AudioStreamBuilder *builder) {
+        oboe::AudioStreamBuilder *builder) {
     builder->setDataCallback(this)
-        ->setErrorCallback(this)
-        ->setDeviceId(mPlaybackDeviceId)
-        ->setDirection(oboe::Direction::Output)
-        ->setChannelCount(mOutputChannelCount);
-
+            ->setErrorCallback(this)
+            ->setDeviceId(mPlaybackDeviceId)
+            ->setDirection(oboe::Direction::Output)
+            ->setChannelCount(mOutputChannelCount);
     return setupCommonStreamParameters(builder);
 }
 
-/**
- * Set the stream parameters which are common to both recording and playback
- * streams.
- * @param builder The playback or recording stream builder
- */
 oboe::AudioStreamBuilder *LiveEffectEngine::setupCommonStreamParameters(
-    oboe::AudioStreamBuilder *builder) {
-    // We request EXCLUSIVE mode since this will give us the lowest possible
-    // latency.
-    // If EXCLUSIVE mode isn't available the builder will fall back to SHARED
-    // mode.
+        oboe::AudioStreamBuilder *builder) {
     builder->setAudioApi(mAudioApi)
-        ->setFormat(mFormat)
-        ->setFormatConversionAllowed(true)
-//        ->setSharingMode(oboe::SharingMode::Exclusive)
-        ->setPerformanceMode(oboe::PerformanceMode::LowLatency);
+            ->setFormat(mFormat)
+            ->setFormatConversionAllowed(true)
+            ->setPerformanceMode(oboe::PerformanceMode::LowLatency);
     return builder;
 }
 
-/**
- * Close the stream. AudioStream::close() is a blocking call so
- * the application does not need to add synchronization between
- * onAudioReady() function and the thread calling close().
- * [the closing thread is the UI thread in this sample].
- * @param stream the stream to close
- */
+void LiveEffectEngine::closeStreams() {
+    if (mDuplexStream) {
+        mDuplexStream->stop();
+    }
+    closeStream(mPlayStream);
+    closeStream(mRecordingStream);
+    mDuplexStream.reset();
+}
+
 void LiveEffectEngine::closeStream(std::shared_ptr<oboe::AudioStream> &stream) {
     if (stream) {
-        oboe::Result result = stream->stop();
-        if (result != oboe::Result::OK) {
-        }
-        result = stream->close();
-        if (result != oboe::Result::OK) {
-        } else {
+        if (stream->getState() != oboe::StreamState::Closed) {
+            oboe::Result result = stream->stop();
+            if (result != oboe::Result::OK && result != oboe::Result::ErrorClosed) {
+                __android_log_print(ANDROID_LOG_ERROR, "LiveEffectEngine", "Error stopping stream: %s", oboe::convertToText(result));
+            }
+            result = stream->close();
+            if (result != oboe::Result::OK && result != oboe::Result::ErrorClosed) {
+                __android_log_print(ANDROID_LOG_ERROR, "LiveEffectEngine", "Error closing stream: %s", oboe::convertToText(result));
+            }
         }
         stream.reset();
     }
 }
 
-/**
- * Warn in logcat if non-low latency stream is created
- * @param stream: newly created stream
- *
- */
-void LiveEffectEngine::warnIfNotLowLatency(std::shared_ptr<oboe::AudioStream> &stream) {
-    if (stream->getPerformanceMode() != oboe::PerformanceMode::LowLatency) {
-        printf(
-            "Stream is NOT low latency.");
-    }
-}
 
-/**
- * Handles playback stream's audio request. In this sample, we simply block-read
- * from the record stream for the required samples.
- *
- * @param oboeStream: the playback stream that requesting additional samples
- * @param audioData:  the buffer to load audio samples for playback stream
- * @param numFrames:  number of frames to load to audioData buffer
- * @return: DataCallbackResult::Continue.
- */
 oboe::DataCallbackResult LiveEffectEngine::onAudioReady(
-    oboe::AudioStream *oboeStream, void *audioData, int32_t numFrames) {
+        oboe::AudioStream *oboeStream, void *audioData, int32_t numFrames) {
     float *floatData = static_cast<float*>(audioData);
+
+    if (mIsRecording && mWavFile.is_open()) {
+        for (int i = 0; i < numFrames * mOutputChannelCount; ++i) {
+            int16_t pcmSample = static_cast<int16_t>(floatData[i] * 32767.0f);
+            mWavFile.write(reinterpret_cast<const char*>(&pcmSample), sizeof(pcmSample));
+        }
+    }
+
+    // Apply volume and pass data to the playback stream
     for (int i = 0; i < numFrames * mOutputChannelCount; ++i) {
         floatData[i] *= mVolume;
     }
     return mDuplexStream->onAudioReady(oboeStream, audioData, numFrames);
 }
 
-/**
- * Oboe notifies the application for "about to close the stream".
- *
- * @param oboeStream: the stream to close
- * @param error: oboe's reason for closing the stream
- */
-void LiveEffectEngine::onErrorBeforeClose(oboe::AudioStream *oboeStream,
-                                          oboe::Result error) {
-    printf("%s stream Error before close: %s",
-         oboe::convertToText(oboeStream->getDirection()),
-         oboe::convertToText(error));
-}
-
-/**
- * Oboe notifies application that "the stream is closed"
- *
- * @param oboeStream
- * @param error
- */
-void LiveEffectEngine::onErrorAfterClose(oboe::AudioStream *oboeStream,
-                                         oboe::Result error) {
-    printf("%s stream Error after close: %s",
-         oboe::convertToText(oboeStream->getDirection()),
-         oboe::convertToText(error));
-
-    closeStreams();
-
-    // Restart the stream if the error is a disconnect.
-    if (error == oboe::Result::ErrorDisconnected) {
-        printf("Restarting AudioStream");
-        openStreams();
+void LiveEffectEngine::warnIfNotLowLatency(std::shared_ptr<oboe::AudioStream> &stream) {
+    if (stream->getPerformanceMode() != oboe::PerformanceMode::LowLatency) {
+        __android_log_print(ANDROID_LOG_WARN, "LiveEffectEngine", "Stream is NOT low latency.");
     }
 }
 
