@@ -82,7 +82,6 @@ void Game::tap(int64_t eventTimeAsUptime) {
 }
 
 void Game::tick(){
-
     switch (mGameState){
         case GameState::Playing:
             TapResult r;

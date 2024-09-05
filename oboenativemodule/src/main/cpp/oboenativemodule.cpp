@@ -19,7 +19,7 @@ extern "C" {
     JNIEXPORT void JNICALL
     Java_in_reconv_oboenativemodule_LiveEffectEngine_delete(JNIEnv * env, jclass) {
         if (engine) {
-            engine -> setEffectOn(false, "");
+            engine -> setEffectOn(false);
             delete engine;
             engine = nullptr;
         }
@@ -27,12 +27,11 @@ extern "C" {
 
     JNIEXPORT jboolean JNICALL
     Java_in_reconv_oboenativemodule_LiveEffectEngine_setEffectOn(
-            JNIEnv * env, jclass, jboolean isEffectOn,jstring fullPathToFile) {
+            JNIEnv * env, jclass, jboolean isEffectOn) {
         if (engine == nullptr) {
             return JNI_FALSE;
         }
-        const char *path = (*env).GetStringUTFChars(fullPathToFile, 0);
-        return engine -> setEffectOn(isEffectOn, path) ? JNI_TRUE : JNI_FALSE;
+        return engine -> setEffectOn(isEffectOn) ? JNI_TRUE : JNI_FALSE;
     }
 
     JNIEXPORT void JNICALL
@@ -100,6 +99,37 @@ extern "C" {
     Java_in_reconv_oboenativemodule_LiveEffectEngine_setVolume(JNIEnv *env , jclass type, jfloat volume) {
         engine ->setVolume(volume);
     }
+
+    JNIEXPORT void JNICALL
+    Java_in_reconv_oboenativemodule_LiveEffectEngine_startRecording(
+            JNIEnv * env, jclass, jstring fullPathToFile) {
+        if (engine == nullptr) {
+            return;
+        }
+        const char *path = (*env).GetStringUTFChars(fullPathToFile, 0);
+        engine -> startRecording(path);
+    }
+
+    JNIEXPORT void JNICALL
+    Java_in_reconv_oboenativemodule_LiveEffectEngine_startRecordingNative(
+            JNIEnv * env, jclass, jstring fullPathToFile) {
+        if (engine == nullptr) {
+            return;
+        }
+        const char *path = (*env).GetStringUTFChars(fullPathToFile, 0);
+        engine -> startRecordingNative(path);
+    }
+
+    JNIEXPORT void JNICALL
+    Java_in_reconv_oboenativemodule_LiveEffectEngine_stopRecording(
+            JNIEnv * env, jclass) {
+        if (engine == nullptr) {
+            return;
+        }
+        engine ->stopRecording();
+    }
+
+
 }
 
 
