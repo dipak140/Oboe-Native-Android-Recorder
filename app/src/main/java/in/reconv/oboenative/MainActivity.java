@@ -18,6 +18,11 @@ import android.util.Log;
 import android.view.View;
 import android.widget.Button;
 import android.widget.Toast;
+import android.media.MediaPlayer;
+
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.IOException;
 
 import in.reconv.oboenative.databinding.ActivityMainBinding;
 import in.reconv.oboenativemodule.NativeLib;
@@ -39,7 +44,9 @@ public class MainActivity extends Activity implements
     private static final String TAG = MainActivity.class.getName();
     private static final int MY_PERMISSIONS_REQUEST_WRITE_EXTERNAL_STORAGE = 100;
     private String filePath;
-
+    private MediaPlayer mediaPlayer;
+    private MediaPlayer mediaMusicPlayer;
+    private String filePathMusic;
 
     // Full path that is going to be sent to C++ through JNI ("/storage/emulated/0/Recorders/record.wav")
 
@@ -57,6 +64,9 @@ public class MainActivity extends Activity implements
         NativeLib.letsdosomting();
         Button startFeedbackButton = findViewById(R.id.startFeedbackButton);
         Button stopFeedbackButton = findViewById(R.id.stopFeedbackButton);
+        Button playRecordingButton = findViewById(R.id.playRecordingButton);
+        Button startRecordingButton = findViewById(R.id.startRecordingButton);
+        Button stopRecordingButton = findViewById(R.id.stopRecordingButton);
 
         startFeedbackButton.setOnClickListener(new View.OnClickListener() {
             @Override
@@ -72,6 +82,52 @@ public class MainActivity extends Activity implements
                 stopEffect();
             }
         });
+
+        playRecordingButton.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                playRecording();
+            }
+        });
+
+        startRecordingButton.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                LiveEffectEngine.setAPI(apiSelection);
+                String timestamp = String.valueOf(System.currentTimeMillis());
+                filePath = getExternalFilesDir(null) + "/" + timestamp + "_audio_recording.wav";
+                Log.d("MainActivity", "File path: " + filePath);
+                filePathMusic = getExternalFilesDir(null) + "/" + "Karaoke.wav";
+
+                mediaMusicPlayer = new MediaPlayer();
+                try {
+                    mediaMusicPlayer.setDataSource(filePathMusic);
+                    mediaMusicPlayer.prepare();
+                    mediaMusicPlayer.setVolume(0.5f, 0.5f);
+                    mediaMusicPlayer.start();
+                } catch (IOException e) {
+                    e.printStackTrace();
+                    Toast.makeText(MainActivity.this, "Error playing music", Toast.LENGTH_SHORT).show();
+                }
+
+                new Thread(new Runnable() {
+                    @Override
+                    public void run() {
+                        LiveEffectEngine.startRecording(filePath);
+                    }
+                }).start();
+            }
+        });
+
+        stopRecordingButton.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                LiveEffectEngine.stopRecording();
+                mediaMusicPlayer.stop();
+                mediaMusicPlayer.release();
+            }
+        });
+
 
         LiveEffectEngine.setRecordingDeviceId(2);
         LiveEffectEngine.setPlaybackDeviceId(2);
@@ -107,6 +163,31 @@ public class MainActivity extends Activity implements
         }
     }
 
+    private void playRecording() {
+        if (filePath != null) {
+            mediaPlayer = new MediaPlayer();
+            mediaMusicPlayer = new MediaPlayer();
+            try {
+                mediaPlayer.setDataSource(filePath);
+                mediaPlayer.prepare();
+                mediaPlayer.start();
+                mediaPlayer.setOnCompletionListener(new MediaPlayer.OnCompletionListener() {
+                    @Override
+                    public void onCompletion(MediaPlayer mp) {
+                        mp.release();
+                        mediaPlayer = null;
+                    }
+                });
+            } catch (Exception e) {
+                e.printStackTrace();
+                System.out.println("Electo" + e);
+                Toast.makeText(this, "Error playing recording", Toast.LENGTH_SHORT).show();
+            }
+        } else {
+            Toast.makeText(this, "No recording found", Toast.LENGTH_SHORT).show();
+        }
+    }
+
     private void startEffect() {
         Log.d(TAG, "Attempting to start");
 
@@ -115,9 +196,7 @@ public class MainActivity extends Activity implements
             return;
         }
 
-        String timestamp = String.valueOf(System.currentTimeMillis());
-        filePath = getExternalFilesDir(null) + "/" + timestamp + "_audio_recording.wav";
-        boolean success = LiveEffectEngine.setEffectOn(true, filePath);
+        boolean success = LiveEffectEngine.setEffectOn(true);
         if (success) {
             isPlaying = true;
         } else {
@@ -131,7 +210,7 @@ public class MainActivity extends Activity implements
     }
 
     private void stopEffect() {
-        LiveEffectEngine.setEffectOn(false, filePath);
+        LiveEffectEngine.setEffectOn(false);
         isPlaying = false;
     }
 

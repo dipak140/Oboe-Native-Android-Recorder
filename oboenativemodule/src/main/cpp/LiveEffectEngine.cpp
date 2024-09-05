@@ -4,16 +4,28 @@
 #include <android/log.h>
 #include "LiveEffectEngine.h"
 
+namespace little_endian_io
+{
+    template <typename Word>
+    std::ostream& write_word( std::ostream& outs, Word value, unsigned size = sizeof( Word ) )
+    {
+        for (; size; --size, value >>= 8)
+            outs.put( static_cast <char> (value & 0xFF) );
+        return outs;
+    }
+}
+using namespace little_endian_io;
+
 LiveEffectEngine::LiveEffectEngine() {
     assert(mOutputChannelCount == mInputChannelCount);
 }
 
 void LiveEffectEngine::setRecordingDeviceId(int32_t deviceId) {
-    mRecordingDeviceId = deviceId;
+//    mRecordingDeviceId = deviceId;
 }
 
 void LiveEffectEngine::setPlaybackDeviceId(int32_t deviceId) {
-    mPlaybackDeviceId = deviceId;
+//    mPlaybackDeviceId = deviceId;
 }
 
 bool LiveEffectEngine::isAAudioRecommended() {
@@ -26,19 +38,17 @@ bool LiveEffectEngine::setAudioApi(oboe::AudioApi api) {
     return true;
 }
 
-bool LiveEffectEngine::setEffectOn(bool isOn, const char *fullPathToFile) {
+bool LiveEffectEngine::setEffectOn(bool isOn) {
     bool success = true;
     if (isOn != mIsEffectOn) {
         if (isOn) {
             // Open audio streams and start recording
-            success = openStreams(fullPathToFile) == oboe::Result::OK;
-            if (success) {
-                startRecording(fullPathToFile, mSampleRate, mInputChannelCount);
+            isStreamOpen = openPlaybackStream() == oboe::Result::OK;
+            if (isStreamOpen) {
                 mIsEffectOn = isOn;
             }
         } else {
             // Stop recording and close streams
-            stopRecording();
             closeStreams();
             mIsEffectOn = isOn;
         }
@@ -46,89 +56,211 @@ bool LiveEffectEngine::setEffectOn(bool isOn, const char *fullPathToFile) {
     return success;
 }
 
-void LiveEffectEngine::startRecording(const std::string& filePath, int32_t sampleRate, int16_t numChannels) {
-    mWavFilePath = filePath;
-    mWavFileSampleRate = sampleRate;
-    mWavFileNumChannels = numChannels;
+// method when wave file headers are written in java itself.
+void LiveEffectEngine::startRecordingNative(const char * filePath) {
+    this->isRecording = true;
+    oboe::AudioStreamBuilder builder;
+    builder.setDirection(oboe::Direction::Input);
+    builder.setPerformanceMode(oboe::PerformanceMode::None);
+    builder.setFormat(oboe::AudioFormat::I16);
+    builder.setChannelCount(oboe::ChannelCount::Mono);
+    builder.setInputPreset(oboe::InputPreset::Generic);
+    builder.setSharingMode(oboe::SharingMode::Exclusive);
+    builder.setSampleRate(mSampleRate);
+    builder.setSampleRateConversionQuality(oboe::SampleRateConversionQuality::Best);
+    builder.setAudioApi(oboe::AudioApi::AAudio);
 
-    // Open the file in binary mode
-    mWavFile.open(mWavFilePath, std::ios::binary);
-    if (mWavFile.is_open()) {
-        // Write the WAV header placeholder
-        writeWavHeaderPlaceholder();
-        mIsRecording = true;
-    } else {
-        __android_log_print(ANDROID_LOG_ERROR, "LiveEffectEngine", "Failed to open WAV file: %s", mWavFilePath.c_str());
+    // Wave file generating stuff (from https://www.cplusplus.com/forum/beginner/166954/)
+    int sampleRate = mSampleRate;
+    int bitsPerSample = 16; // multiple of 8
+    int numChannels = 1; // 2 for stereo, 1 for mono
+
+    std::ofstream f;
+    //const char *path = "/storage/emulated/0/Music/record.wav";
+    const char *path = filePath;
+    f.open(path, std::ios::binary);
+
+    if (!f.is_open()) {
+        __android_log_print(ANDROID_LOG_INFO, "OboeAudioRecorder", "Failed to open file %s", path);
+        return;
     }
-}
-
-void LiveEffectEngine::stopRecording() {
-    if (mRecordingStream) {
-        mRecordingStream->requestStop();
-        mRecordingStream->close();
-    }
-
-    if (mIsRecording && mWavFile.is_open()) {
-        writeWavHeader(); // Write the final WAV header with correct sizes
-
-        // Close the WAV file
-        mWavFile.close();
-        mIsRecording = false;
-    }
-}
-
-void LiveEffectEngine::writeWavHeader() {
-    if (!mWavFile.is_open()) {
+    oboe::Result r = builder.openStream(&stream);
+    if (r != oboe::Result::OK) {
         return;
     }
 
-    // File size
-    std::streampos fileSize = mWavFile.tellp();
+    r = stream->requestStart();
+    if (r != oboe::Result::OK) {
+        return;
+    }
 
-    // Go to the beginning and write the correct header
-    mWavFile.seekp(0, std::ios::beg);
+    auto a = stream->getState();
+    if (a == oboe::StreamState::Started) {
 
-    // RIFF header
-    mWavFile.write("RIFF", 4);
-    uint32_t chunkSize = static_cast<uint32_t>(fileSize) - 8;
-    mWavFile.write(reinterpret_cast<const char*>(&chunkSize), 4);
-    mWavFile.write("WAVE", 4);
+        constexpr int kMillisecondsToRecord = 20;
+        auto requestedFrames = (int32_t) (kMillisecondsToRecord *
+                                          (stream->getSampleRate() / oboe::kMillisPerSecond));
+        __android_log_print(ANDROID_LOG_INFO, "OboeAudioRecorder", "requestedFrames = %d",
+                            requestedFrames);
 
-    // fmt sub-chunk
-    mWavFile.write("fmt ", 4);
-    uint32_t subChunk1Size = 16; // For PCM
-    mWavFile.write(reinterpret_cast<const char*>(&subChunk1Size), 4);
-    uint16_t audioFormat = 1; // PCM = 1
-    mWavFile.write(reinterpret_cast<const char*>(&audioFormat), 2);
-    mWavFile.write(reinterpret_cast<const char*>(&mWavFileNumChannels), 2);
-    mWavFile.write(reinterpret_cast<const char*>(&mWavFileSampleRate), 4);
-    uint32_t byteRate = mWavFileSampleRate * mWavFileNumChannels * sizeof(int16_t);
-    mWavFile.write(reinterpret_cast<const char*>(&byteRate), 4);
-    uint16_t blockAlign = mWavFileNumChannels * sizeof(int16_t);
-    mWavFile.write(reinterpret_cast<const char*>(&blockAlign), 2);
-    uint16_t bitsPerSample = 16; // Assuming 16-bit PCM
-    mWavFile.write(reinterpret_cast<const char*>(&bitsPerSample), 2);
+        int16_t mybuffer[requestedFrames];
+        constexpr int64_t kTimeoutValue = 3 * oboe::kNanosPerMillisecond;
 
-    // data sub-chunk
-    mWavFile.write("data", 4);
-    uint32_t subChunk2Size = static_cast<uint32_t>(fileSize) - 44;
-    mWavFile.write(reinterpret_cast<const char*>(&subChunk2Size), 4);
+        int framesRead = 0;
+        do {
+            auto result = stream->read(mybuffer, requestedFrames, 0);
+            if (result != oboe::Result::OK) {
+                break;
+            }
+            framesRead = result.value();
+            __android_log_print(ANDROID_LOG_INFO, "OboeAudioRecorder", "framesRead = %d",
+                                framesRead);
+            if (framesRead > 0) {
+                break;
+            }
+        } while (framesRead != 0);
+
+        while (isRecording) {
+            auto result = stream->read(mybuffer, requestedFrames, kTimeoutValue * 1000);
+            if (result == oboe::Result::OK) {
+                auto nbFramesRead = result.value();
+                for (int i = 0; i < nbFramesRead; i++) {
+                    write_word(f, (int) (mybuffer[i]), 2);
+                }
+            } else {
+                auto error = convertToText(result.error());
+                __android_log_print(ANDROID_LOG_INFO, "OboeAudioRecorder", "error = %s", error);
+            }
+        }
+
+        __android_log_print(ANDROID_LOG_INFO, "OboeAudioRecorder", "Requesting stop");
+        f.close();
+    }
+}
+
+void LiveEffectEngine::startRecording(const char * filePath) {
+    __android_log_print(ANDROID_LOG_INFO, "OboeAudioRecorder", "Starting recording natively at %s", filePath);
+    this->isRecording = true;
+    oboe::AudioStreamBuilder builder;
+    builder.setDirection(oboe::Direction::Input);
+    builder.setPerformanceMode(oboe::PerformanceMode::None);
+    builder.setFormat(oboe::AudioFormat::I16);
+    builder.setChannelCount(oboe::ChannelCount::Mono);
+    builder.setInputPreset(oboe::InputPreset::VoiceCommunication);
+    builder.setSharingMode(oboe::SharingMode::Exclusive);
+    builder.setSampleRate(mSampleRate);
+    builder.setSampleRateConversionQuality(oboe::SampleRateConversionQuality::Best);
+    builder.setAudioApi(oboe::AudioApi::AAudio);
+    builder.openStream(mRecordingStream);
+
+    // Wave file generating stuff (from https://www.cplusplus.com/forum/beginner/166954/)
+    int sampleRate = mSampleRate;
+    int bitsPerSample = 16; // multiple of 8
+    int numChannels = 1; // 2 for stereo, 1 for mono
+
+    std::ofstream f;
+    //const char *path = "/storage/emulated/0/Music/record.wav";
+    const char *path = filePath;
+    f.open(path, std::ios::binary);
+    // Write the file headers
+    f << "RIFF----WAVEfmt ";     // (chunk size to be filled in later)
+    write_word( f,     16, 4 );  // no extension data
+    write_word( f,      1, 2 );  // PCM - integer samples
+    write_word( f,      numChannels, 2 );  // one channel (mono) or two channels (stereo file)
+    write_word( f,  mSampleRate, 4 );  // samples per second (Hz)
+    //write_word( f, 176400, 4 );  // (Sample Rate * BitsPerSample * Channels) / 8
+    write_word( f,(mSampleRate * bitsPerSample * numChannels) / 8, 4 );  // (Sample Rate * BitsPerSample * Channels) / 8
+    write_word( f,      4, 2 );  // data block size (size of two integer samples, one for each channel, in bytes)
+    write_word( f,     bitsPerSample, 2 );  // number of bits per sample (use a multiple of 8)
+
+    // Write the data chunk header
+    size_t data_chunk_pos = f.tellp();
+    f << "data----";  // (chunk size to be filled in later)
+    // f.flush();
+
+    // Write the audio samples
+    constexpr double two_pi = 6.283185307179586476925286766559;
+    constexpr double max_amplitude = 32760;  // "volume"
+
+    oboe::Result r = builder.openStream(&stream);
+    if (r != oboe::Result::OK) {
+        return;
+    }
+
+    r = stream->requestStart();
+    if (r != oboe::Result::OK) {
+        return;
+    }
+
+    auto a = stream->getState();
+    if (a == oboe::StreamState::Started) {
+
+        constexpr int kMillisecondsToRecord = 20;
+        auto requestedFrames = (int32_t) (kMillisecondsToRecord * (stream->getSampleRate() / oboe::kMillisPerSecond));
+        __android_log_print(ANDROID_LOG_INFO, "OboeAudioRecorder", "requestedFrames = %d", requestedFrames);
+
+        int16_t mybuffer[requestedFrames];
+        constexpr int64_t kTimeoutValue = 3 * oboe::kNanosPerMillisecond;
+
+        int framesRead = 0;
+        do {
+            auto result = stream->read(mybuffer, requestedFrames, 0);
+            if (result != oboe::Result::OK) {
+                break;
+            }
+            framesRead = result.value();
+            __android_log_print(ANDROID_LOG_INFO, "OboeAudioRecorder", "framesRead = %d", framesRead);
+            if (framesRead > 0) {
+                break;
+            }
+        } while (framesRead != 0);
+
+        while (isRecording) {
+            auto result = stream->read(mybuffer, requestedFrames, kTimeoutValue * 1000);
+            if (result == oboe::Result::OK) {
+                auto nbFramesRead = result.value();
+                for (int i = 0; i < nbFramesRead; i++) {
+                    write_word( f, (int)(mybuffer[i]), 2 );
+                }
+            } else {
+                auto error = convertToText(result.error());
+                __android_log_print(ANDROID_LOG_INFO, "OboeAudioRecorder", "error = %s", error);
+            }
+        }
+
+        __android_log_print(ANDROID_LOG_INFO, "OboeAudioRecorder", "Requesting stop");
+
+        // (We'll need the final file size to fix the chunk sizes above)
+        size_t file_length = f.tellp();
+
+        // Fix the data chunk header to contain the data size
+        f.seekp( data_chunk_pos + 4 );
+        write_word( f, file_length - data_chunk_pos + 8 );
+
+        // Fix the file header to contain the proper RIFF chunk size, which is (file size - 8) bytes
+        f.seekp( 0 + 4 );
+        write_word( f, file_length - 8, 4 );
+        f.close();
+    }
 }
 
 
-void LiveEffectEngine::writeWavHeaderPlaceholder() {
-    char header[44] = { 0 };
-    mWavFile.write(header, 44);
+void LiveEffectEngine::stopRecording() {
+    this->isRecording = false;
+    stream->requestStop();
+    stream->close();
 }
 
-oboe::Result LiveEffectEngine::openStreams(const char *fullPathToFile) {
+
+oboe::Result LiveEffectEngine::openPlaybackStream() {
     oboe::AudioStreamBuilder inBuilder, outBuilder;
     setupPlaybackStreamParameters(&outBuilder);
     oboe::Result result = outBuilder.openStream(mPlayStream);
     if (result != oboe::Result::OK) {
-        mSampleRate = 44100; // Fallback to a standard sample rate
+        mSampleRate = oboe::kUnspecified;
         return result;
     } else {
+        // The input stream needs to run at the same sample rate as the output.
         mSampleRate = mPlayStream->getSampleRate();
     }
     warnIfNotLowLatency(mPlayStream);
@@ -145,14 +277,13 @@ oboe::Result LiveEffectEngine::openStreams(const char *fullPathToFile) {
     mDuplexStream->setSharedInputStream(mRecordingStream);
     mDuplexStream->setSharedOutputStream(mPlayStream);
     mDuplexStream->start();
-
     return result;
 }
 
 oboe::AudioStreamBuilder *LiveEffectEngine::setupRecordingStreamParameters(
         oboe::AudioStreamBuilder *builder, int32_t sampleRate) {
-    builder->setDeviceId(mRecordingDeviceId)
-            ->setDirection(oboe::Direction::Input)
+//    builder->setDeviceId(mRecordingDeviceId)
+    builder->setDirection(oboe::Direction::Input)
             ->setSampleRate(sampleRate)
             ->setChannelCount(mInputChannelCount);
     return setupCommonStreamParameters(builder);
@@ -162,7 +293,7 @@ oboe::AudioStreamBuilder *LiveEffectEngine::setupPlaybackStreamParameters(
         oboe::AudioStreamBuilder *builder) {
     builder->setDataCallback(this)
             ->setErrorCallback(this)
-            ->setDeviceId(mPlaybackDeviceId)
+//            ->setDeviceId(mPlaybackDeviceId)
             ->setDirection(oboe::Direction::Output)
             ->setChannelCount(mOutputChannelCount);
     return setupCommonStreamParameters(builder);
@@ -173,7 +304,7 @@ oboe::AudioStreamBuilder *LiveEffectEngine::setupCommonStreamParameters(
     builder->setAudioApi(mAudioApi)
             ->setFormat(mFormat)
             ->setFormatConversionAllowed(true)
-            ->setPerformanceMode(oboe::PerformanceMode::LowLatency);
+            ->setPerformanceMode(oboe::PerformanceMode::None);
     return builder;
 }
 
@@ -202,7 +333,6 @@ void LiveEffectEngine::closeStream(std::shared_ptr<oboe::AudioStream> &stream) {
     }
 }
 
-
 oboe::DataCallbackResult LiveEffectEngine::onAudioReady(
         oboe::AudioStream *oboeStream, void *audioData, int32_t numFrames) {
     float *floatData = static_cast<float*>(audioData);
@@ -214,12 +344,9 @@ oboe::DataCallbackResult LiveEffectEngine::onAudioReady(
         }
     }
 
-    // Apply volume and pass data to the playback stream
-    for (int i = 0; i < numFrames * mOutputChannelCount; ++i) {
-        floatData[i] *= mVolume;
-    }
     return mDuplexStream->onAudioReady(oboeStream, audioData, numFrames);
 }
+
 
 void LiveEffectEngine::warnIfNotLowLatency(std::shared_ptr<oboe::AudioStream> &stream) {
     if (stream->getPerformanceMode() != oboe::PerformanceMode::LowLatency) {
