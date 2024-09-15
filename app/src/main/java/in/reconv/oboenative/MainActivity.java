@@ -1,5 +1,7 @@
 package in.reconv.oboenative;
 
+import static android.media.MediaRecorder.AudioSource.UNPROCESSED;
+import static android.media.MediaRecorder.AudioSource.VOICE_PERFORMANCE;
 import static android.os.Environment.getExternalStorageDirectory;
 import static in.reconv.oboenativemodule.DuplexStreamForegroundService.ACTION_START;
 import static in.reconv.oboenativemodule.DuplexStreamForegroundService.ACTION_STOP;
@@ -34,11 +36,13 @@ public class MainActivity extends Activity implements
         ActivityCompat.OnRequestPermissionsResultCallback {
 
     // Used to load the 'oboenative' library on application startup.
-
     private static final int OBOE_API_AAUDIO = 0;
     private ActivityMainBinding binding;
     private boolean isPlaying = false;
     private int apiSelection = OBOE_API_AAUDIO;
+    private int InputPresetPreferanceVoicePerformance = VOICE_PERFORMANCE;
+    private int InputPresetPreferanceUnprocessed = UNPROCESSED;
+
     private boolean mAAudioRecommended;
     private static final int AUDIO_EFFECT_REQUEST = 0;
     private static final String TAG = MainActivity.class.getName();
@@ -53,6 +57,7 @@ public class MainActivity extends Activity implements
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        LiveEffectEngine.setCallbackObject(this);
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE)
                 != PackageManager.PERMISSION_GRANTED) {
             ActivityCompat.requestPermissions(this,
@@ -72,14 +77,16 @@ public class MainActivity extends Activity implements
             @Override
             public void onClick(View view) {
                 LiveEffectEngine.setAPI(apiSelection);
-                startEffect();
+                LiveEffectEngine.pauseRecording();
+                //startEffect();
             }
         });
 
         stopFeedbackButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
-                stopEffect();
+                LiveEffectEngine.resumeRecording();
+                //stopEffect();
             }
         });
 
@@ -97,23 +104,13 @@ public class MainActivity extends Activity implements
                 String timestamp = String.valueOf(System.currentTimeMillis());
                 filePath = getExternalFilesDir(null) + "/" + timestamp + "_audio_recording.wav";
                 Log.d("MainActivity", "File path: " + filePath);
-                filePathMusic = getExternalFilesDir(null) + "/" + "Karaoke.wav";
-
-                mediaMusicPlayer = new MediaPlayer();
-                try {
-                    mediaMusicPlayer.setDataSource(filePathMusic);
-                    mediaMusicPlayer.prepare();
-                    mediaMusicPlayer.setVolume(0.5f, 0.5f);
-                    mediaMusicPlayer.start();
-                } catch (IOException e) {
-                    e.printStackTrace();
-                    Toast.makeText(MainActivity.this, "Error playing music", Toast.LENGTH_SHORT).show();
-                }
-
                 new Thread(new Runnable() {
                     @Override
                     public void run() {
-                        LiveEffectEngine.startRecording(filePath);
+                        System.out.println("Before calling start recording: " + System.currentTimeMillis());
+                        LiveEffectEngine.startRecordingWithoutFile(filePath, InputPresetPreferanceUnprocessed, System.currentTimeMillis());
+                        System.out.println("After calling start recording: " + System.currentTimeMillis());
+                        System.out.println(LiveEffectEngine.getRecordingDelay());
                     }
                 }).start();
             }
@@ -123,8 +120,6 @@ public class MainActivity extends Activity implements
             @Override
             public void onClick(View view) {
                 LiveEffectEngine.stopRecording();
-                mediaMusicPlayer.stop();
-                mediaMusicPlayer.release();
             }
         });
 
@@ -146,6 +141,23 @@ public class MainActivity extends Activity implements
 
         onStartTest();
 
+    }
+
+    public void onRecordingStarted(String eventInfo) {
+        // Handle the event
+        System.out.println("Event: " + eventInfo);
+        System.out.println("isPlaying: " + System.currentTimeMillis());
+//        filePathMusic = getExternalFilesDir(null) + "/" + "Karaoke.wav";
+//        mediaMusicPlayer = new MediaPlayer();
+//        try {
+//            mediaMusicPlayer.setDataSource(filePathMusic);
+//            mediaMusicPlayer.prepare();
+//            mediaMusicPlayer.setVolume(0.5f, 0.5f);
+//            mediaMusicPlayer.start();
+//        } catch (IOException e) {
+//            e.printStackTrace();
+//            Toast.makeText(MainActivity.this, "Error playing music", Toast.LENGTH_SHORT).show();
+//        }
     }
 
     private void onStartTest() {

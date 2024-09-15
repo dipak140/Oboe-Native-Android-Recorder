@@ -33,6 +33,9 @@ public:
     void setPlaybackDeviceId(int32_t deviceId);
     oboe::AudioStream *stream{};
     bool isRecording = true;
+    bool isPaused = false;
+    bool isTimeRecorded = false;
+    int startRecordingDelay = 0;
 
     /**
      * @param isOn
@@ -40,7 +43,8 @@ public:
      */
     bool setEffectOn(bool isOn);
     // New methods for recording
-    void startRecording(const char * filePath);
+    void startRecording(const char * filePath, oboe::InputPreset inputPreset, long startRecordingTimestamp);
+    void startRecordingWithoutFile(const char *filePath, oboe::InputPreset inputPreset, long startRecordingTimestamp);
     void stopRecording();
 
     /*
@@ -52,13 +56,15 @@ public:
     bool setAudioApi(oboe::AudioApi);
     bool isAAudioRecommended(void);
     void setVolume(float volume);  // Add this line
+    void pauseRecording();
+    void resumeRecording();
+    int getStartRecordingDelay();
 
-    void startRecordingNative(const char *filePath);
 
 private:
     bool              mIsEffectOn = false;
-//    int32_t           mRecordingDeviceId = oboe::kUnspecified;
-//    int32_t           mPlaybackDeviceId = oboe::kUnspecified;
+    int32_t           mRecordingDeviceId = oboe::kUnspecified;
+    int32_t           mPlaybackDeviceId = oboe::kUnspecified;
     const oboe::AudioFormat mFormat = oboe::AudioFormat::Float; // for easier processing
     oboe::AudioApi    mAudioApi = oboe::AudioApi::AAudio;
     int32_t           mSampleRate = 44100;
@@ -97,8 +103,8 @@ private:
     bool isStreamOpen = false;
 
     void StartRecordingNative(const char *filePath);
-
     void playWavFile(const char *wavFilePath);
+    void callJavaMethod(const char *methodName, const char *methodSignature, const char *str);
 };
 
 #endif  // OBOE_LIVEEFFECTENGINE_H
