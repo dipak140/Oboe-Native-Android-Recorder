@@ -23,9 +23,13 @@ public enum LiveEffectEngine {
     public static native void delete();
     static native void native_setDefaultStreamValues(int defaultSampleRate, int defaultFramesPerBurst);
     public static native void setVolume(float volume);
-    public static native void startRecording(String fullPathTofile);
-    public static native void startRecordingNative(String fullPathTofile);
+    public static native void startRecording(String fullPathTofile, int inputPresetPreference, long startRecordingTime);
+    public static native void startRecordingWithoutFile(String fullPathTofile, int inputPresetPreference, long startRecordingTime);
     public static native void stopRecording();
+    public static native void resumeRecording();
+    public static native void pauseRecording();
+    public static native int getRecordingDelay();
+    public static native void setCallbackObject(Object callbackObject);
 
     public static void setDefaultStreamValues(Context context) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN_MR1){

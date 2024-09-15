@@ -4,6 +4,13 @@
 static const int kOboeApiAAudio = 0;
 static const int kOboeApiOpenSLES = 1;
 static LiveEffectEngine * engine = nullptr;
+JavaVM* g_javaVM = nullptr; // Define JavaVM pointer
+jobject g_callbackObject = nullptr; // Define g_callbackObject
+
+JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM* vm, void* reserved) {
+    g_javaVM = vm; // Store the JavaVM pointer
+    return JNI_VERSION_1_6; // Return the JNI version you're using
+}
 
 extern "C" {
     JNIEXPORT jboolean JNICALL
@@ -102,25 +109,52 @@ extern "C" {
 
     JNIEXPORT void JNICALL
     Java_in_reconv_oboenativemodule_LiveEffectEngine_startRecording(
-            JNIEnv * env, jclass, jstring fullPathToFile) {
+            JNIEnv * env, jclass, jstring fullPathToFile, jint inputPresetPreference, jlong startRecordingTimestamp) {
         if (engine == nullptr) {
             return;
         }
+
+        oboe::InputPreset inputPreset;
+        switch (inputPresetPreference) {
+            case 10:
+                inputPreset = oboe::InputPreset::VoicePerformance;
+                break;
+            case 9:
+                inputPreset = oboe::InputPreset::Unprocessed;
+                break;
+            default:
+                return;
+        }
+
         const char *path = (*env).GetStringUTFChars(fullPathToFile, 0);
-        engine -> startRecording(path);
+        engine -> startRecording(path, inputPreset, startRecordingTimestamp);
     }
 
     JNIEXPORT void JNICALL
-    Java_in_reconv_oboenativemodule_LiveEffectEngine_startRecordingNative(
-            JNIEnv * env, jclass, jstring fullPathToFile) {
+    Java_in_reconv_oboenativemodule_LiveEffectEngine_startRecordingWithoutFile(
+            JNIEnv * env, jclass, jstring fullPathToFile, jint inputPresetPreference, jlong startRecordingTimestamp) {
         if (engine == nullptr) {
             return;
         }
+
+        oboe::InputPreset inputPreset;
+        switch (inputPresetPreference) {
+            case 10:
+                inputPreset = oboe::InputPreset::VoicePerformance;
+                break;
+            case 9:
+                inputPreset = oboe::InputPreset::Unprocessed;
+                break;
+            default:
+                return;
+        }
+
         const char *path = (*env).GetStringUTFChars(fullPathToFile, 0);
-        engine -> startRecordingNative(path);
+        engine -> startRecordingWithoutFile(path, inputPreset, startRecordingTimestamp);
     }
 
-    JNIEXPORT void JNICALL
+
+JNIEXPORT void JNICALL
     Java_in_reconv_oboenativemodule_LiveEffectEngine_stopRecording(
             JNIEnv * env, jclass) {
         if (engine == nullptr) {
@@ -129,7 +163,45 @@ extern "C" {
         engine ->stopRecording();
     }
 
+    JNIEXPORT void JNICALL
+    Java_in_reconv_oboenativemodule_LiveEffectEngine_pauseRecording(
+            JNIEnv * env, jclass) {
+        if (engine == nullptr) {
+            return;
+        }
+        engine ->pauseRecording();
+    }
+
+    JNIEXPORT void JNICALL
+    Java_in_reconv_oboenativemodule_LiveEffectEngine_resumeRecording(
+            JNIEnv * env, jclass) {
+        if (engine == nullptr) {
+            return;
+        }
+        engine ->resumeRecording();
+    }
+
+    JNIEXPORT int JNICALL
+    Java_in_reconv_oboenativemodule_LiveEffectEngine_getRecordingDelay(
+            JNIEnv * env, jclass) {
+        if (engine == nullptr) {
+            return 0;
+        }
+        return engine ->getStartRecordingDelay();
+    }
+
 
 }
 
 
+
+extern "C"
+JNIEXPORT void JNICALL
+Java_in_reconv_oboenativemodule_LiveEffectEngine_setCallbackObject(JNIEnv* env, jclass clazz, jobject callbackObject) {
+    // Delete the previous global reference if it exists
+    if (g_callbackObject != nullptr) {
+        env->DeleteGlobalRef(g_callbackObject);
+    }
+    // Create a new global reference to the callback object
+    g_callbackObject = env->NewGlobalRef(callbackObject);
+}
