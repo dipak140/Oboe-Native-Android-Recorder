@@ -24,7 +24,7 @@ public enum LiveEffectEngine {
     static native void native_setDefaultStreamValues(int defaultSampleRate, int defaultFramesPerBurst);
     public static native void setVolume(float volume);
     public static native void startRecording(String fullPathTofile, int inputPresetPreference, long startRecordingTime);
-    public static native void startRecordingWithoutFile(String fullPathTofile, int inputPresetPreference, long startRecordingTime);
+    public static native void startRecordingWithoutFile(String fullPathTofile, String musicFilePath, int inputPresetPreference, long startRecordingTime);
     public static native void stopRecording();
     public static native void resumeRecording();
     public static native void pauseRecording();

@@ -180,8 +180,9 @@ void LiveEffectEngine::startRecording(const char * filePath, oboe::InputPreset i
     }
 }
 
-void LiveEffectEngine::startRecordingWithoutFile(const char * filePath, oboe::InputPreset inputPreset, long startRecordTimestamp) {
+void LiveEffectEngine::startRecordingWithoutFile(const char * filePath, const char * musicPath,oboe::InputPreset inputPreset, long startRecordTimestamp) {
     __android_log_print(ANDROID_LOG_INFO, "OboeAudioRecorder", "Starting recording natively at %s", filePath);
+    __android_log_print(ANDROID_LOG_INFO, "OboeAudioRecorder", "Plaing music natively at %s", musicPath);
     this->isRecording = true;
     oboe::AudioStreamBuilder builder;
     builder.setDirection(oboe::Direction::Input);
@@ -228,8 +229,10 @@ void LiveEffectEngine::startRecordingWithoutFile(const char * filePath, oboe::In
         return;
     }
 
-    auto a = stream->getState();
+    // Open and play the WAV file alongside the recording
+     //playWavFile(musicPath);
 
+    auto a = stream->getState();
      //Capture the precise time when the recording starts
      auto startTime = std::chrono::high_resolution_clock::now();
      __android_log_print(ANDROID_LOG_INFO, "OboeAudioRecorder", "Recording started at %lld ms", currentTimeMillis());
@@ -259,8 +262,18 @@ void LiveEffectEngine::startRecordingWithoutFile(const char * filePath, oboe::In
 
         while (isRecording) {
             auto result = stream->read(mybuffer, requestedFrames, kTimeoutValue * 1000);
+            int64_t playbackStartFramePosition = 0;
+            int64_t playbackStartTimeNanoseconds = 0;
+            oboe::Result results = stream->getTimestamp(CLOCK_MONOTONIC, &playbackStartFramePosition, &playbackStartTimeNanoseconds);
 
-            // Capture the precise time when the recording starts
+            if (results == oboe::Result::OK) {
+                // Convert nanoseconds to milliseconds
+                __android_log_print(ANDROID_LOG_INFO, "OboeAudioRecorder", "Timestamp! %lld ms", playbackStartTimeNanoseconds / 1000000);
+            } else {
+                // Handle error in getting timestamp
+                __android_log_print(ANDROID_LOG_ERROR, "OboeAudioRecorder", "Failed to get timestamp: ");
+            }// Capture the precise time when the recording starts
+
             if (!isTimeRecorded){
                 __android_log_print(ANDROID_LOG_INFO, "OboeAudioRecorder", "Stream Started first %lld ms", currentTimeMillis());
                 callJavaMethod("onRecordingStarted", "(Ljava/lang/String;)V","34");
@@ -300,6 +313,46 @@ void LiveEffectEngine::startRecordingWithoutFile(const char * filePath, oboe::In
         f.close();
     }
 }
+
+void LiveEffectEngine::playWavFile(const char *wavFilePath) {
+    __android_log_print(ANDROID_LOG_INFO, "OboeAudioPlayer", "Playing WAV file from %s", wavFilePath);
+
+    std::ifstream wavFile(wavFilePath, std::ios::binary);
+    if (!wavFile.is_open()) {
+        __android_log_print(ANDROID_LOG_ERROR, "OboeAudioPlayer", "Failed to open WAV file");
+        return;
+    }
+
+    // Skip the WAV file header
+    wavFile.seekg(44, std::ios::beg);
+//
+//    // Read the PCM audio data from the file into a buffer
+    std::vector<int16_t> pcmData;
+    int16_t sample;
+    while (wavFile.read(reinterpret_cast<char *>(&sample), sizeof(sample))) {
+        pcmData.push_back(sample);
+    }
+//
+    wavFile.close();
+//
+//    // Initialize and start the playback stream
+//    oboe::AudioStreamBuilder playbackBuilder;
+//    playbackBuilder.setDirection(oboe::Direction::Output)
+//            ->setSampleRate(mSampleRate)
+//            ->setChannelCount(oboe::ChannelCount::Stereo)
+//            ->setFormat(oboe::AudioFormat::I16)
+//            ->setPerformanceMode(oboe::PerformanceMode::LowLatency)
+//            ->setCallback(this);
+//
+//    oboe::Result result = playbackBuilder.openStream(mPlayStream);
+//    if (result == oboe::Result::OK) {
+//        mPlayStream->start();
+//        __android_log_print(ANDROID_LOG_INFO, "OboeAudioPlayer", "Playback started.");
+//    } else {
+//        __android_log_print(ANDROID_LOG_ERROR, "OboeAudioPlayer", "Failed to open playback stream.");
+//    }
+}
+
 
 int LiveEffectEngine::getStartRecordingDelay(){
     return startRecordingDelay;
@@ -461,13 +514,15 @@ void LiveEffectEngine::closeStream(std::shared_ptr<oboe::AudioStream> &stream) {
 
 oboe::DataCallbackResult LiveEffectEngine::onAudioReady(
         oboe::AudioStream *oboeStream, void *audioData, int32_t numFrames) {
-    float *floatData = static_cast<float*>(audioData);
 
-    if (mIsRecording && mWavFile.is_open()) {
-        for (int i = 0; i < numFrames * mOutputChannelCount; ++i) {
-            int16_t pcmSample = static_cast<int16_t>(floatData[i] * 32767.0f);
-            mWavFile.write(reinterpret_cast<const char*>(&pcmSample), sizeof(pcmSample));
-        }
+    if (audioData == nullptr || numFrames <= 0) {
+        return oboe::DataCallbackResult::Stop;
+    }
+
+    // Process audio data
+    float *floatData = static_cast<float*>(audioData);
+    for (int i = 0; i < numFrames; i++) {
+        floatData[i] = 0;  // Example of processing audio data
     }
 
     return mDuplexStream->onAudioReady(oboeStream, audioData, numFrames);

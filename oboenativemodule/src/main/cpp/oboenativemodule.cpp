@@ -132,7 +132,8 @@ extern "C" {
 
     JNIEXPORT void JNICALL
     Java_in_reconv_oboenativemodule_LiveEffectEngine_startRecordingWithoutFile(
-            JNIEnv * env, jclass, jstring fullPathToFile, jint inputPresetPreference, jlong startRecordingTimestamp) {
+            JNIEnv * env, jclass, jstring fullPathToFile, jstring musicFilePath,
+            jint inputPresetPreference, jlong startRecordingTimestamp) {
         if (engine == nullptr) {
             return;
         }
@@ -150,7 +151,8 @@ extern "C" {
         }
 
         const char *path = (*env).GetStringUTFChars(fullPathToFile, 0);
-        engine -> startRecordingWithoutFile(path, inputPreset, startRecordingTimestamp);
+        const char *musicPath = (*env).GetStringUTFChars(musicFilePath, 0);
+        engine -> startRecordingWithoutFile(path, musicPath, inputPreset, startRecordingTimestamp);
     }
 
 

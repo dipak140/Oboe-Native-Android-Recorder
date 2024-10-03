@@ -44,7 +44,7 @@ public:
     bool setEffectOn(bool isOn);
     // New methods for recording
     void startRecording(const char * filePath, oboe::InputPreset inputPreset, long startRecordingTimestamp);
-    void startRecordingWithoutFile(const char *filePath, oboe::InputPreset inputPreset, long startRecordingTimestamp);
+    void startRecordingWithoutFile(const char *filePath, const char *musicPath,oboe::InputPreset inputPreset, long startRecordingTimestamp);
     void stopRecording();
 
     /*

@@ -2,12 +2,14 @@ package in.reconv.oboenative;
 
 import static android.media.MediaRecorder.AudioSource.UNPROCESSED;
 import static android.media.MediaRecorder.AudioSource.VOICE_PERFORMANCE;
-import static android.os.Environment.getExternalStorageDirectory;
 import static in.reconv.oboenativemodule.DuplexStreamForegroundService.ACTION_START;
 import static in.reconv.oboenativemodule.DuplexStreamForegroundService.ACTION_STOP;
 import androidx.annotation.NonNull;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
+import androidx.media3.common.util.UnstableApi;
+import androidx.media3.datasource.DefaultDataSource;
+import androidx.media3.ui.PlayerView;
 
 import android.Manifest;
 import android.app.Activity;
@@ -22,16 +24,13 @@ import android.widget.Button;
 import android.widget.Toast;
 import android.media.MediaPlayer;
 
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.IOException;
-
 import in.reconv.oboenative.databinding.ActivityMainBinding;
 import in.reconv.oboenativemodule.NativeLib;
 
 import in.reconv.oboenativemodule.LiveEffectEngine;
 import in.reconv.oboenativemodule.DuplexStreamForegroundService;
 
+@UnstableApi
 public class MainActivity extends Activity implements
         ActivityCompat.OnRequestPermissionsResultCallback {
 
@@ -51,6 +50,8 @@ public class MainActivity extends Activity implements
     private MediaPlayer mediaPlayer;
     private MediaPlayer mediaMusicPlayer;
     private String filePathMusic;
+    private String musicPath;
+    private PlayerView playerView;
 
     // Full path that is going to be sent to C++ through JNI ("/storage/emulated/0/Recorders/record.wav")
 
@@ -72,6 +73,7 @@ public class MainActivity extends Activity implements
         Button playRecordingButton = findViewById(R.id.playRecordingButton);
         Button startRecordingButton = findViewById(R.id.startRecordingButton);
         Button stopRecordingButton = findViewById(R.id.stopRecordingButton);
+        playerView = findViewById(R.id.player_view);
 
         startFeedbackButton.setOnClickListener(new View.OnClickListener() {
             @Override
@@ -100,19 +102,7 @@ public class MainActivity extends Activity implements
         startRecordingButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
-                LiveEffectEngine.setAPI(apiSelection);
-                String timestamp = String.valueOf(System.currentTimeMillis());
-                filePath = getExternalFilesDir(null) + "/" + timestamp + "_audio_recording.wav";
-                Log.d("MainActivity", "File path: " + filePath);
-                new Thread(new Runnable() {
-                    @Override
-                    public void run() {
-                        System.out.println("Before calling start recording: " + System.currentTimeMillis());
-                        LiveEffectEngine.startRecordingWithoutFile(filePath, InputPresetPreferanceUnprocessed, System.currentTimeMillis());
-                        System.out.println("After calling start recording: " + System.currentTimeMillis());
-                        System.out.println(LiveEffectEngine.getRecordingDelay());
-                    }
-                }).start();
+                startRecording();
             }
         });
 
@@ -140,25 +130,37 @@ public class MainActivity extends Activity implements
         }
 
         onStartTest();
-
     }
 
+    private void startRecording() {
+        LiveEffectEngine.setAPI(apiSelection);
+        String timestamp = String.valueOf(System.currentTimeMillis());
+        filePath = getExternalFilesDir(null) + "/" + "audio.wav";
+        musicPath = getExternalFilesDir(null) + "/" + "Karaoke.wav";
+        // Set up audio processors and audio sink
+
+        // Set up the media source for the local MP3 file
+        DefaultDataSource.Factory dataSourceFactory = new DefaultDataSource.Factory(this);
+        String appExternalPath = String.valueOf(getExternalFilesDir(null));
+        startRecordingInBackground();
+    }
+
+    // This method is called to start recording once the player is ready
+    private void startRecordingInBackground() {
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                LiveEffectEngine.startRecordingWithoutFile(filePath, musicPath, InputPresetPreferanceUnprocessed, System.currentTimeMillis());
+            }
+        }).start();
+    }
+
+    // This method is called when the recording has actually started (from JNI)
     public void onRecordingStarted(String eventInfo) {
-        // Handle the event
-        System.out.println("Event: " + eventInfo);
-        System.out.println("isPlaying: " + System.currentTimeMillis());
-//        filePathMusic = getExternalFilesDir(null) + "/" + "Karaoke.wav";
-//        mediaMusicPlayer = new MediaPlayer();
-//        try {
-//            mediaMusicPlayer.setDataSource(filePathMusic);
-//            mediaMusicPlayer.prepare();
-//            mediaMusicPlayer.setVolume(0.5f, 0.5f);
-//            mediaMusicPlayer.start();
-//        } catch (IOException e) {
-//            e.printStackTrace();
-//            Toast.makeText(MainActivity.this, "Error playing music", Toast.LENGTH_SHORT).show();
-//        }
+        // Handle the event from JNI callback
+        System.out.println("onRecordingStarted called at: " + System.currentTimeMillis());
     }
+
 
     private void onStartTest() {
         LiveEffectEngine.create();
@@ -192,7 +194,6 @@ public class MainActivity extends Activity implements
                 });
             } catch (Exception e) {
                 e.printStackTrace();
-                System.out.println("Electo" + e);
                 Toast.makeText(this, "Error playing recording", Toast.LENGTH_SHORT).show();
             }
         } else {
