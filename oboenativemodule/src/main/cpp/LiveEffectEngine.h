@@ -71,6 +71,8 @@ private:
     const int32_t     mInputChannelCount = oboe::ChannelCount::Mono;
     const int32_t     mOutputChannelCount = oboe::ChannelCount::Mono;
     size_t data_chunk_pos = 0;
+    std::vector<int16_t> pcmData;  // Buffer to store PCM data
+    size_t playbackIndex = 0;
 
     std::unique_ptr<FullDuplexPass> mDuplexStream;
     std::shared_ptr<oboe::AudioStream> mRecordingStream;
@@ -105,6 +107,9 @@ private:
     void StartRecordingNative(const char *filePath);
     void playWavFile(const char *wavFilePath);
     void callJavaMethod(const char *methodName, const char *methodSignature, const char *str);
+
+
+    void stopPlayback();
 };
 
 #endif  // OBOE_LIVEEFFECTENGINE_H

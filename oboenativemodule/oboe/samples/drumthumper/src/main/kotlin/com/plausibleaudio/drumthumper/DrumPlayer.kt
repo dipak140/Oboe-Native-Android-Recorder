@@ -66,7 +66,7 @@ class DrumPlayer {
         loadWavAsset(assetMgr, "KickDrum.wav", BASSDRUM, PAN_BASSDRUM)
         loadWavAsset(assetMgr, "SnareDrum.wav", SNAREDRUM, PAN_SNAREDRUM)
         loadWavAsset(assetMgr, "CrashCymbal.wav", CRASHCYMBAL, PAN_CRASHCYMBAL)
-        loadWavAsset(assetMgr, "RideCymbal.wav", RIDECYMBAL, PAN_RIDECYMBAL)
+        loadWavAsset(assetMgr, "Karaoke.wav", RIDECYMBAL, PAN_RIDECYMBAL)
         loadWavAsset(assetMgr, "MidTom.wav", MIDTOM, PAN_MIDTOM)
         loadWavAsset(assetMgr, "LowTom.wav", LOWTOM, PAN_LOWTOM)
         loadWavAsset(assetMgr, "HiHat_Open.wav", HIHATOPEN, PAN_HIHATOPEN)

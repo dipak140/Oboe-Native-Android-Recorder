@@ -64,4 +64,6 @@ publishing {
 
 dependencies {
     implementation libs.core.ktx
+    implementation libs.ffmpeg.kit.full
+
 }
